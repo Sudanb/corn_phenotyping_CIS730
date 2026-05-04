@@ -1,0 +1,638 @@
+get context of the directory : keypoints_pipeline and generate a requirements.txt and readme.md for github push
+Agent:Explore keypoints_pipeline directory
+IN
+Explore the directory c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline thoroughly. I need to understand:
+1. All Python files and their imports (to derive requirements)
+2. The overall purpose and architecture of the pipeline
+3. Key scripts, their roles, and how they connect
+4. Any config files, existing docs, or README/requirements that exist
+5. Model architectures used (ResNet, EfficientNet, custom CNN etc.)
+6. Dataset structure and data flow
+7. Training, evaluation, and inference scripts
+
+Please read ALL Python files and any markdown/text files. List all third-party imports found across all files so I can generate an accurate requirements.txt. Be very thorough.
+Bash
+IN
+find "c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline" -type f -name "*.py" -o -name "*.md" -o -name "*.txt" -o -name "*.json" -o -name "*.yaml" -o -name "*.yml" 2>/dev/null | head -100
+
+OUT
+Exit code 1
+Bash
+IN
+cd /c/Users/sudanb/Desktop/CV_datasets/keypoints_pipeline && find . -type f \( -name "*.py" -o -name "*.md" -o -name "*.txt" -o -name "*.json" -o -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | sort
+
+OUT
+Exit code 1
+Bash
+IN
+ls -la "/c/Users/sudanb/Desktop/CV_datasets/keypoints_pipeline" 2>&1
+
+OUT
+Exit code 2
+Bash
+IN
+dir "c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline" 2>&1 | head -30
+
+OUT
+Exit code 1
+Globpattern: "**/*.py"
+Found 12 files
+Globpattern: "**/*.yml"
+No files found
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\train_all.py
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\train_custom.py
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\training_data_fmt_17\mmdet_dataset_config.py
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\keypoints_2d.json
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\training_data_fmt_17\maize.yaml
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\checkpoints\efficientnet_b3\history.json
+Bash
+IN
+find /c/Users/sudanb/Desktop/CV_datasets/keypoints_pipeline -maxdepth 2 -type f \( -name "*.md" -o -name "*.rst" -o -name "*.txt" \) 2>/dev/null | grep -v label
+
+OUT
+(Bash completed with no output)
+Grep "^import |^from " (in c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline, type: py)
+56 lines of output
+Bash
+IN
+cd /c/Users/sudanb/Desktop/CV_datasets/keypoints_pipeline && find . -type d -maxdepth 2 | sort
+
+OUT
+Exit code 1
+Globpattern: "**"
+Found 101 files
+I now have a complete picture of the pipeline. Let me read a couple of key files to confirm exact imports before writing the files.
+
+Globpattern: "keypoints_pipeline/*.py"
+Found 11 files
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\measure_plants.py
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\project_keypoints.py
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\visualize_suspicious.py
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\reg_dataset.py
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\reg_model.py
+Now let me check the existing methodology.md and any eval results for the README.
+
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\methodology.md
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\checkpoints\efficientnet_b3\eval_results.json
+Now I have everything I need. Writing both files now.
+
+Write c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\requirements.txt
+8 lines
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.24.0
+scipy>=1.10.0
+Pillow>=9.0.0
+plyfile>=0.8.1
+opencv-python>=4.7.0
+Write c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\README.md
+211 lines
+# Maize Plant Phenotyping — Keypoints Pipeline
+
+End-to-end pipeline for predicting 3D plant measurements (stem length, internode lengths, leaf lengths) from single RGB images of field-grown maize (*Zea mays*). The pipeline covers 3D point cloud processing, 2D keypoint projection, and deep regression model training/evaluation.
+
+---
+
+## Overview
+
+```
+Raw PLY point clouds
+        │
+        ▼
+measure_plants.py       ── Extract stem, internode, and leaf lengths via MST
+        │
+        ▼
+project_keypoints.py    ── Project 3D attachment keypoints onto 2D RGB images
+        │
+        ▼
+reg_dataset.py          ── Build PyTorch Dataset (640×640 images → 32 targets)
+        │
+        ▼
+train_*.py              ── Train EfficientNet-B3 / ResNet-34 / Custom CNN
+        │
+        ▼
+eval_reg.py             ── Evaluate single-view and multi-view (75 views/plant)
+```
+
+---
+
+## Dataset
+
+- **Source**: Field-grown maize point clouds (segmented PLY files, 100k points/plant)
+- **Plants**: ~520 plants, up to 16 leaves per plant
+- **Camera**: Intel RealSense D435 (640×640, hfov=90°, vfov=65°)
+- **Views per plant**: 75 (5 azimuths × 5 elevations × 3 distances)
+- **Total images**: ~39 000
+- **Split**: 70% train / 15% val / 15% test
+
+### Regression targets (32 per sample)
+
+| Index | Target |
+|-------|--------|
+| 0 | Stem length (m) |
+| 1–15 | Internode lengths 1–15 (m) |
+| 16–31 | Leaf lengths 1–16 (m) |
+
+Missing targets (e.g. plant has only 10 leaves) are masked out of the loss.
+
+---
+
+## Models
+
+All models share the same regression head:
+
+```
+Linear(in_dim, 512) → BN → ReLU → Dropout
+Linear(512, 128)    → BN → ReLU → Dropout
+Linear(128, 32)     → ReLU          # non-negative outputs
+```
+
+| Model | Encoder | Feature dim | Trainable from |
+|-------|---------|-------------|----------------|
+| `efficientnet` | EfficientNet-B3 | 1536 | ImageNet pretrained |
+| `resnet34` | ResNet-34 (to layer 3) | 512 | ImageNet pretrained |
+| `custom` | Custom CNN (residual blocks) | 512 | Scratch |
+
+**Training details**
+
+- Optimizer: AdamW (separate LR for encoder and head)
+- Scheduler: CosineAnnealingLR (η_min = 1e-6)
+- Loss: Masked MSE
+- Gradient clipping: max_norm = 1.0
+- Augmentation: horizontal flip, rotation ±10°, color jitter, Gaussian blur, random erasing
+
+---
+
+## Installation
+
+```bash
+git clone <repo-url>
+cd keypoints_pipeline
+pip install -r requirements.txt
+```
+
+> **Note**: Install PyTorch matching your CUDA version from [pytorch.org](https://pytorch.org/get-started/locally/) before running pip install.
+
+---
+
+## Usage
+
+### 1. Measure plants from point clouds
+
+```bash
+python measure_plants.py
+```
+
+Outputs `labels.json` (stem/internode/leaf lengths) and `keypoints.json` (3D attachment coordinates). Edit `SEG_DIR` at the top of the file to point to your segmented PLY directory.
+
+### 2. Project keypoints to 2D
+
+```bash
+python project_keypoints.py
+```
+
+Outputs `keypoints_2d.json` with per-image 2D keypoint coordinates and visibility flags.
+
+### 3. Train models
+
+Train all three models sequentially:
+
+```bash
+python train_all.py
+```
+
+Or train individually:
+
+```bash
+python train_efficientnet.py
+python train_resnet34.py
+python train_custom.py
+```
+
+Checkpoints are saved to `checkpoints/{efficientnet_b3,resnet34,custom_cnn}/best.pt`.
+
+### 4. Evaluate
+
+```bash
+python eval_reg.py --model efficientnet --ckpt checkpoints/efficientnet_b3/best.pt
+python eval_reg.py --model resnet34     --ckpt checkpoints/resnet34/best.pt
+python eval_reg.py --model custom       --ckpt checkpoints/custom_cnn/best.pt
+```
+
+Reports single-view and multi-view (75-view average) MAE, RMSE, and R² per slot and overall. Saves per-plant predictions to `checkpoints/<model>/per_plant_predictions.csv`.
+
+### 5. Visualise suspicious plants
+
+```bash
+python visualize_suspicious.py
+```
+
+Renders keypoint overlays for plants with anomalous stem length estimates. Output images saved to `suspicious_viz/`.
+
+---
+
+## Results (EfficientNet-B3 — baseline)
+
+| Mode | Overall MAE (m) | Overall RMSE (m) |
+|------|----------------|-----------------|
+| Single-view | 0.186 | 0.278 |
+| Multi-view (75 views avg) | 0.183 | 0.274 |
+
+> These are early baseline results. Negative R² values indicate the models are not yet outperforming a mean predictor, largely due to high intra-class variance and single-image ambiguity. Multi-view aggregation provides a modest improvement.
+
+---
+
+## Repository Structure
+
+```
+keypoints_pipeline/
+├── reg_model.py            # EfficientNetReg, ResNet34Reg, CustomCNNReg
+├── reg_dataset.py          # PlantRegDataset, augmentation, target building
+├── train_engine.py         # Shared training loop (optimizer, scheduler, checkpointing)
+├── train_efficientnet.py   # EfficientNet-B3 entry point
+├── train_resnet34.py       # ResNet-34 entry point
+├── train_custom.py         # Custom CNN entry point
+├── train_all.py            # Run all three sequentially
+├── eval_reg.py             # Evaluation & metrics
+├── measure_plants.py       # 3D point cloud → labels/keypoints
+├── project_keypoints.py    # 3D keypoints → 2D projections
+├── visualize_suspicious.py # Keypoint overlay renderer
+├── requirements.txt
+└── checkpoints/
+    ├── efficientnet_b3/
+    ├── resnet34/
+    └── custom_cnn/
+```
+
+---
+
+## Data Format Notes
+
+**labels.json**
+```json
+{
+  "0001": {
+    "stem_length_m": 1.6445,
+    "internode_lengths_m": [0.103, 0.115, ...],
+    "leaf_lengths_m": [0.147, 0.949, ...]
+  }
+}
+```
+
+**keypoints_2d.json**
+```json
+{
+  "plant_0001_rgb_001": {
+    "keypoints": [[305, 210, 1], [306, 27, 0], ...],
+    "elevation_deg": -30,
+    "distance_m": 1.0
+  }
+}
+```
+
+Visibility flag: `1` = keypoint projects inside the image frame, `0` = occluded/out-of-frame.
+
+---
+
+## License
+
+See repository root for license information.
+Both files are written:
+
+requirements.txt — 7 packages: torch, torchvision, numpy, scipy, Pillow, plyfile, opencv-python (all with minimum version pins)
+README.md — covers pipeline flow, dataset stats (520 plants / ~39k images / 75 views), all three models and their configs, install/usage instructions for every script, and the EfficientNet baseline results from eval_results.json
+The eval results section honestly notes the negative R² values (model not yet outperforming mean predictor) so reviewers have accurate expectations.
+
+c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\README.md
+save a pdf of this conversation
+Bash Check if pandoc is available
+IN
+pandoc --version 2>/dev/null || echo "NOT_FOUND"
+
+OUT
+Exit code 1
+Bash Check available Python PDF libraries
+IN
+python -c "import weasyprint; print('weasyprint OK')" 2>/dev/null || python -c "import fpdf; print('fpdf OK')" 2>/dev/null || python -c "import reportlab; print('reportlab OK')" 2>/dev/null || echo "NO_PDF_LIB"
+
+OUT
+Exit code 1
+Bash Install fpdf2 for PDF generation
+IN
+pip install fpdf2 --quiet 2>&1 | tail -1
+
+OUT
+Exit code 1
+Bash Install fpdf2
+IN
+pip install fpdf2 2>&1 | tail -3
+
+OUT
+Exit code 1
+Bash Install fpdf2 via pip3
+IN
+pip3 install fpdf2 2>&1 | tail -5
+
+OUT
+Exit code 1
+Bash Check Python and pip availability
+IN
+python --version && pip --version
+
+OUT
+Exit code 127
+Bash Locate Python executable on Windows
+IN
+where python 2>/dev/null; where python3 2>/dev/null; where py 2>/dev/null
+
+OUT
+Exit code 127
+PowerShell
+IN
+{
+  "command": "Get-Command python, python3, py -ErrorAction SilentlyContinue | Select-Object Name, Source",
+  "description": "Find Python on Windows"
+}
+OUT
+(PowerShell completed with no output)
+PowerShell
+IN
+{
+  "command": "Get-ChildItem \"C:\\Users\\sudanb\\anaconda3\\Scripts\\pip.exe\", \"C:\\Users\\sudanb\\AppData\\Local\\Programs\\Python\\*\\python.exe\", \"C:\\ProgramData\\Miniconda3\\python.exe\" -ErrorAction SilentlyContinue | Select-Object FullName",
+  "description": "Search common Python install locations"
+}
+OUT
+Exit code 1
+PowerShell
+IN
+{
+  "command": "Get-ChildItem \"C:\\Users\\sudanb\" -Filter \"python.exe\" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object FullName -First 5",
+  "description": "Search for python.exe under user home"
+}
+OUT
+(PowerShell completed with no output)
+PowerShell
+IN
+{
+  "command": "Get-ChildItem \"C:\\\" -Filter \"python.exe\" -Recurse -Depth 5 -ErrorAction SilentlyContinue | Select-Object FullName -First 5",
+  "description": "Search for python.exe system-wide (depth 5)"
+}
+OUT
+Exit code 1
+FullName                                  
+--------                                  
+C:\gurobi952\win64\python37\bin\python.exe
+C:\isaacsim\kit\python\python.exe         
+C:\Users\sudanb\Downloads\kit-sdk-publi...
+PowerShell
+IN
+{
+  "command": "& \"C:\\isaacsim\\kit\\python\\python.exe\" -c \"import fpdf; print('fpdf OK')\" 2>&1\n& \"C:\\isaacsim\\kit\\python\\python.exe\" -c \"import sys; print(sys.version)\" 2>&1",
+  "description": "Check isaacsim python and fpdf availability"
+}
+OUT
+python.exe : Traceback (most recent call last):
+At line:1 char:1
++ & "C:\isaacsim\kit\python\python.exe" -c "import fpdf; print('fpdf OK ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last) 
+   ::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'fpdf'
+3.11.13 (tags/v3.11.13-dirty:498b971, Jun  9 2025, 09:38:51) [MSC v.1912 64 bit (AMD64)]
+PowerShell
+IN
+{
+  "command": "& \"C:\\isaacsim\\kit\\python\\python.exe\" -m pip install fpdf2 --quiet 2>&1 | Select-Object -Last 3",
+  "description": "Install fpdf2 into isaacsim Python"
+}
+OUT
+[notice] A new release of pip is available: 24.3.1 -> 26.1
+[notice] To update, run: C:\isaacsim\kit\python\python.exe -m pip install 
+--upgrade pip
+Good, fpdf2 is installed. Now I'll write a script to generate the PDF and run it.
+
+Write c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py
+143 lines
+"""Generate a PDF of the keypoints_pipeline conversation."""
+
+from fpdf import FPDF
+from fpdf.enums import XPos, YPos
+import textwrap, os
+
+CONV = [
+    {
+        "role": "User",
+        "text": (
+            "get context of the directory : keypoints_pipeline and generate a "
+            "requirements.txt and readme.md for github push"
+        ),
+    },
+    {
+        "role": "Assistant",
+        "text": (
+            "Explored the keypoints_pipeline directory thoroughly.\n\n"
+            "Pipeline overview:\n"
+            "  1. measure_plants.py  — extract stem/internode/leaf lengths from "
+            "segmented PLY point clouds via Minimum Spanning Tree arc-length fitting.\n"
+            "  2. project_keypoints.py — project 3D leaf-attachment keypoints onto "
+            "2D RGB images using Intel RealSense D435 camera intrinsics (640×640, "
+            "hfov=90°, vfov=65°).\n"
+            "  3. reg_dataset.py / reg_model.py / train_engine.py — build PyTorch "
+            "Dataset and train deep regression models (EfficientNet-B3, ResNet-34, "
+            "Custom CNN) to predict 32 plant-measurement targets from RGB images.\n"
+            "  4. eval_reg.py — evaluate single-view and 75-view-aggregated MAE, "
+            "RMSE, R² metrics and export per-plant predictions to CSV.\n\n"
+            "Dataset: ~520 plants, 75 views each (~39 000 images), 640×640 PNG.\n"
+            "Targets: 1 stem length + 15 internode lengths + 16 leaf lengths = 32.\n"
+            "Loss: Masked MSE (only valid targets contribute).\n\n"
+            "Generated files:\n"
+            "  • requirements.txt — torch>=2.0.0, torchvision>=0.15.0, numpy>=1.24.0,"
+            " scipy>=1.10.0, Pillow>=9.0.0, plyfile>=0.8.1, opencv-python>=4.7.0\n"
+            "  • README.md — full GitHub-ready documentation covering pipeline flow,"
+            " dataset, models, installation, usage, baseline results, and directory "
+            "structure."
+        ),
+    },
+    {
+        "role": "User",
+        "text": "save a pdf of this conversation",
+    },
+    {
+        "role": "Assistant",
+        "text": (
+            "Searched for PDF tooling (pandoc, weasyprint, fpdf, reportlab) — none "
+            "pre-installed. Located Python 3.11 at C:\\isaacsim\\kit\\python\\python.exe "
+            "and installed fpdf2. Generated this PDF via export_conversation.py."
+        ),
+    },
+]
+
+OUT = os.path.join(os.path.dirname(__file__), "conversation.pdf")
+MARGIN = 15
+PAGE_W = 210
+
+class PDF(FPDF):
+    def header(self):
+        self.set_font("Helvetica", "B", 9)
+        self.set_text_color(120, 120, 120)
+        self.cell(0, 8, "keypoints_pipeline — Session Conversation", align="C",
+                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.set_draw_color(200, 200, 200)
+        self.line(MARGIN, self.get_y(), PAGE_W - MARGIN, self.get_y())
+        self.ln(2)
+
+    def footer(self):
+        self.set_y(-13)
+        self.set_font("Helvetica", "I", 8)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 8, f"Page {self.page_no()}", align="C")
+
+
+pdf = PDF()
+pdf.set_margins(MARGIN, MARGIN, MARGIN)
+pdf.set_auto_page_break(auto=True, margin=15)
+pdf.add_page()
+
+# Title
+pdf.set_font("Helvetica", "B", 16)
+pdf.set_text_color(30, 30, 30)
+pdf.cell(0, 10, "keypoints_pipeline — Conversation Log", align="C",
+         new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+pdf.set_font("Helvetica", "", 9)
+pdf.set_text_color(130, 130, 130)
+pdf.cell(0, 6, "Generated 2026-05-04", align="C",
+         new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+pdf.ln(6)
+
+USERBG   = (230, 240, 255)
+ASSISTBG = (240, 250, 240)
+LABELW   = 22
+BODY_W   = PAGE_W - 2 * MARGIN - LABELW - 4
+
+for turn in CONV:
+    is_user = turn["role"] == "User"
+    bg      = USERBG if is_user else ASSISTBG
+    label   = turn["role"]
+    body    = turn["text"]
+
+    # Measure text height
+    pdf.set_font("Helvetica", "", 9)
+    lines = []
+    for para in body.split("\n"):
+        if para.strip() == "":
+            lines.append("")
+        else:
+            lines.extend(textwrap.wrap(para, width=90) or [""])
+    line_h = 5
+    box_h  = len(lines) * line_h + 6
+
+    # Background rect
+    x0 = MARGIN
+    y0 = pdf.get_y()
+    if y0 + box_h > pdf.page_break_trigger:
+        pdf.add_page()
+        y0 = pdf.get_y()
+
+    pdf.set_fill_color(*bg)
+    pdf.rect(x0, y0, PAGE_W - 2 * MARGIN, box_h, style="F")
+
+    # Role label
+    pdf.set_xy(x0 + 2, y0 + 3)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(LABELW, line_h, label)
+
+    # Body text
+    pdf.set_xy(x0 + LABELW + 2, y0 + 3)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(30, 30, 30)
+    for i, line in enumerate(lines):
+        if i > 0:
+            pdf.set_x(x0 + LABELW + 2)
+        pdf.cell(BODY_W, line_h, line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    pdf.ln(3)
+
+pdf.output(OUT)
+print(f"Saved: {OUT}")
+PowerShell
+IN
+{
+  "command": "& \"C:\\isaacsim\\kit\\python\\python.exe\" \"C:\\Users\\sudanb\\Desktop\\CV_datasets\\keypoints_pipeline\\export_conversation.py\"",
+  "description": "Run PDF export script"
+}
+OUT
+Exit code 1
+Traceback (most recent call last):
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 5681, in normalize_text
+    return text.encode(self.core_fonts_encoding).decode("latin-1")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'latin-1' codec can't encode character '\u2014' in position 19: ordinal not in range(256)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py", line 79, in <module>
+    pdf.add_page()
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 1214, in add_page
+    self.header()
+  File "C:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py", line 63, in header
+    self.cell(0, 8, "keypoints_pipeline � Session Conversation", align="C",
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 281, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\deprecation.py", line 36, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 3910, in cell
+    text = self.normalize_text(text)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 5683, in normalize_text
+    raise FPDFUnicodeEncodingException(
+fpdf.errors.FPDFUnicodeEncodingException: Character "�" at index 19 in text is outside the range of characters supported by the font used: "helveticaB". Please consider using a Unicode font.
+Edit c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py
+Modified
+Edit c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py
+Modified
+Edit c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py
+Modified
+PowerShell
+IN
+{
+  "command": "& \"C:\\isaacsim\\kit\\python\\python.exe\" \"C:\\Users\\sudanb\\Desktop\\CV_datasets\\keypoints_pipeline\\export_conversation.py\"",
+  "description": "Run PDF export script"
+}
+OUT
+Exit code 1
+Traceback (most recent call last):
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 5681, in normalize_text
+    return text.encode(self.core_fonts_encoding).decode("latin-1")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'latin-1' codec can't encode character '\u2014' in position 24: ordinal not in range(256)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py", line 137, in <module>
+    pdf.cell(BODY_W, line_h, line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 281, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\deprecation.py", line 36, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 3910, in cell
+    text = self.normalize_text(text)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\isaacsim\kit\python\Lib\site-packages\fpdf\fpdf.py", line 5683, in normalize_text
+    raise FPDFUnicodeEncodingException(
+fpdf.errors.FPDFUnicodeEncodingException: Character "�" at index 24 in text is outside the range of characters supported by the font used: "helvetica". Please consider using a Unicode font.
+Read c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py
+Edit c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py
+Modified
+Edit c:\Users\sudanb\Desktop\CV_datasets\keypoints_pipeline\export_conversation.py
+Edit failed
+Click to expand

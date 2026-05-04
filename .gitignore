@@ -1,0 +1,15 @@
+# Model weights
+checkpoints/**/*.pt
+
+# Large image datasets
+training_data_fmt_17/
+training_data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# IDE
+.vscode/

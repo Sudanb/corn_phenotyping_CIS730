@@ -35,7 +35,7 @@ eval_reg.py             ── Evaluate single-view and multi-view (75 views/pla
 - **Views per plant**: 75 (5 azimuths × 5 elevations × 3 distances)
 - **Total images**: ~39 000
 - **Split**: 70% train / 15% val / 15% test
-
+- **Dataset build for train/test/val: run dataset_build.py ---Creates image dataset split folders
 ### Regression targets (32 per sample)
 
 | Index | Target |

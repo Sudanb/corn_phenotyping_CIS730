@@ -36,6 +36,8 @@ eval_reg.py             ── Evaluate single-view and multi-view (75 views/pla
 - **Total images**: ~39 000
 - **Split**: 70% train / 15% val / 15% test
 - **Dataset build for train/test/val: run dataset_build.py ---Creates image dataset split folders
+- HuggingFace training dataset link:
+https://huggingface.co/datasets/Sudan4313/projected_ply_corndata/tree/main
 ### Regression targets (32 per sample)
 
 | Index | Target |

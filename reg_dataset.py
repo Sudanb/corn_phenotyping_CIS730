@@ -10,11 +10,23 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as T
+from huggingface_hub import hf_hub_download, list_repo_files
+from datasets import load_dataset
+from huggingface_hub import snapshot_download
 
 """file paths"""
 _HERE        = Path(__file__).parent
-IMAGES_DIR   = _HERE / "training_data_fmt_17" / "images"
+#IMAGES_DIR    = _HERE / "training_data_fmt_17" / "images"
+HF_LOCAL   = Path(snapshot_download(
+    repo_id        = "Sudan4313/projected_ply_corndata",
+    repo_type      = "dataset",
+    ignore_patterns= ["annotations/*", "checkpoints/*", "labels/*"]
+))
+IMAGES_DIR = HF_LOCAL/"images"
 LABELS_JSON  = _HERE / "labels.json"
+#Hugging face repo--- please use comment above file paths and un comment the file paths below
+
+
 
 
 RAW_PCD_DIR  = r"C:\Users\sudanb\Desktop\CV_datasets\FielGrwon_ZeaMays_RawPCD_100k\FielGrwon_ZeaMays_RawPCD_100k"
@@ -31,18 +43,19 @@ MIN_STEM_M     = 1.0
 
 
 def build_plant_map() -> dict[str, str]:
-    """
-    Reproduces dataset_build.py's shuffled plant ordering.
-    Returns {"plant_0001": "0042", "plant_0002": "0007", ...}
-    """
-    raw_stems = {Path(f).stem for f in os.listdir(RAW_PCD_DIR) if f.endswith(".ply")}
-    seg_stems = {Path(f).stem for f in os.listdir(SEG_PCD_DIR) if f.endswith(".ply")}
-    common    = sorted(raw_stems & seg_stems)
+    with open(LABELS_JSON) as f:
+        labels_raw = json.load(f)
+    ply_stems = sorted(labels_raw.keys())
+        
+    #raw_stems = {Path(f).stem for f in os.listdir(RAW_PCD_DIR) if f.endswith(".ply")}
+    #seg_stems = {Path(f).stem for f in os.listdir(SEG_PCD_DIR) if f.endswith(".ply")}
+    #common    = sorted(raw_stems & seg_stems)
 
     random.seed(RANDOM_SEED)
-    random.shuffle(common)
+    random.shuffle(ply_stems)
 
-    return {f"plant_{i:04d}": stem for i, stem in enumerate(common, start=1)}
+    #return {f"plant_{i:04d}": stem for i, stem in enumerate(common, start=1)}
+    return {f"plant_{i:04d}": stem for i, stem in enumerate(ply_stems, start=1)}
 
 
 

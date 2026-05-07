@@ -92,7 +92,8 @@ pip install -r requirements.txt
 
 ## Usage
 
-### 1. Measure plants from point clouds
+### 1. Measure plants from point clouds (Suggested to just use the labels.json file)
+###Suggested to simply use labels.json that is already derived to prevent download file path errors of .ply files which cannot be uploaded on github.
 
 ```bash
 python measure_plants.py
